@@ -54,17 +54,18 @@ token_c_array = ', '.join([f'0x{b:02X}' for b in security_token])
 baseHeader = generate_magic_header(baseTag)
 encHeader = generate_magic_header(encTag)
 fileCreated = True
+backup_path = None
 
 MODIFICATIONS = [
     #Pre -Steps:
     {
-        "file": "editor/editor_node.cpp",
+        "file": "core/core_builders.py",
         "operations": [
             {
                 "type": "replace_line",
                 "description": "Modify Godot title To add Godot Secure",
-                "find": "DisplayServer::get_singleton()->window_set_title(title + String(\" - \") + GODOT_VERSION_NAME);",
-                "replace": "DisplayServer::get_singleton()->window_set_title(title + String(\" - \") + GODOT_VERSION_NAME + String(\" (With Godot Secure)\"));"
+                "find": "#define GODOT_VERSION_NAME \"{name}\"",
+                "replace": "#define GODOT_VERSION_NAME \"{name} (With Godot Secure)\""
             }
         ]
     },
@@ -409,7 +410,8 @@ if __name__ == "__main__":
         print(f"{LogColors.BOLD} Security Token:{LogColors.ENDC} {token_hex}")
         print_warning(f"{LogColors.WARNING} Keep this token secret - it's required for decryption!{LogColors.ENDC}")
         print_success(f"{LogColors.OKGREEN} Build is now cryptographically unique{LogColors.ENDC}")
-        print_info(f"{LogColors.OKGREEN} Old Key Backup created at: {LogColors.ENDC}{LogColors.BOLD}{backup_path}{LogColors.ENDC}\n")
+        if not (backup_path == None):
+            print_info(f"{LogColors.OKGREEN} Old Key Backup created at: {LogColors.ENDC}{LogColors.BOLD}{backup_path}{LogColors.ENDC}\n")
     
     exit = input("\nPress Enter key to exit...")
     sys.exit(1)
