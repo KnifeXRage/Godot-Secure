@@ -487,7 +487,10 @@ if __name__ == "__main__":
     else:
         # Too many arguments provided
         print("\nUsage: python Godot_Secure.py <godot_source_root>")
-        exit = input("\nPress Enter key to exit...")
+        try:
+            exit = input("\nPress Enter key to exit...")
+        except EOFError:
+            pass
         sys.exit(1)
         
 
@@ -497,14 +500,20 @@ if __name__ == "__main__":
 
     if not (os.path.isdir(core_dir) and os.path.isfile(sconstruct_file)):
         print(f"{LogColors.FAIL}Error: No valid Godot Source Detected in the Specified Directory.{LogColors.ENDC}")
-        exit = input("\nPress Enter key to exit...")
+        try:
+            exit = input("\nPress Enter key to exit...")
+        except EOFError:
+            pass
         sys.exit(1)
 
     print(f"\nUsing Godot Source Root: {godot_root}")
     confirm = input(f"\n\n ⚠   {LogColors.WARNING}Start Godot Secure Operations on Godot Source Root {LogColors.ENDC}{LogColors.FAIL}(y/n)?{LogColors.ENDC}: ").strip().lower()
     if not (confirm == 'y' or confirm == 'yes'):
         print("Closing Setup...")
-        exit = input("\nPress Enter key to exit...")
+        try:
+            exit = input("\nPress Enter key to exit...")
+        except EOFError:
+            pass
         sys.exit(1)
         
     print(f"\n\n{LogColors.HEADER}=== Applying Camellia Encryption For Godot ==={LogColors.ENDC}")
@@ -517,5 +526,8 @@ if __name__ == "__main__":
         if not (backup_path == None):
             print_info(f"{LogColors.OKGREEN} Old Key Backup created at: {LogColors.ENDC}{LogColors.BOLD}{backup_path}{LogColors.ENDC}\n")
     
-    exit = input("\nPress Enter key to exit...")
+    try:
+        exit = input("\nPress Enter key to exit...")
+    except EOFError:
+        pass
     sys.exit(1)
