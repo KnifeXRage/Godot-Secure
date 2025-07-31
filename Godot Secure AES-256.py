@@ -64,8 +64,13 @@ MODIFICATIONS = [
             {
                 "type": "replace_line",
                 "description": "Modify Godot title To add Godot Secure",
+<<<<<<< HEAD
                 "find": "name = \"Godot Engine\"",
                 "replace": "name = \"Godot Engine (With Godot Secure)\""
+=======
+                "find": "DisplayServer::get_singleton()->window_set_title(title + String(\" - \") + GODOT_VERSION_NAME);",
+                "replace": "DisplayServer::get_singleton()->window_set_title(title + String(\" - \") + GODOT_VERSION_NAME + String(\" (With Godot Secure)\");"
+>>>>>>> parent of 62d8976 (Add missing ")" in replace.)
             }
         ]
     },
@@ -422,8 +427,13 @@ if __name__ == "__main__":
         if not (backup_path == None):
             print_info(f"{LogColors.OKGREEN} Old Key Backup created at: {LogColors.ENDC}{LogColors.BOLD}{backup_path}{LogColors.ENDC}\n")
     
+<<<<<<< HEAD
     try:
         exit = input("\nPress Enter key to exit...")
     except EOFError:
         pass
     sys.exit(1)
+=======
+    exit = input("\nPress Enter key to exit...")
+    sys.exit(1)
+>>>>>>> parent of 62d8976 (Add missing ")" in replace.)
