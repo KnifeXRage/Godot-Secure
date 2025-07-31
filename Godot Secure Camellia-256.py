@@ -54,17 +54,18 @@ token_c_array = ', '.join([f'0x{b:02X}' for b in security_token])
 baseHeader = generate_magic_header(baseTag)
 encHeader = generate_magic_header(encTag)
 fileCreated = True
+backup_path = None
 
 MODIFICATIONS = [
     #Pre -Steps:
     {
-        "file": "editor/editor_node.cpp",
+        "file": "version.py",
         "operations": [
             {
                 "type": "replace_line",
                 "description": "Modify Godot title To add Godot Secure",
-                "find": "DisplayServer::get_singleton()->window_set_title(title + String(\" - \") + GODOT_VERSION_NAME);",
-                "replace": "DisplayServer::get_singleton()->window_set_title(title + String(\" - \") + GODOT_VERSION_NAME + String(\" (With Godot Secure)\"));"
+                "find": "name = \"Godot Engine\"",
+                "replace": "name = \"Godot Engine (With Godot Secure)\""
             }
         ]
     },
@@ -76,7 +77,7 @@ MODIFICATIONS = [
                 "type": "replace_line",
                 "description": "Modify Godot export popup title To add Godot Secure",
                 "find": "set_title(TTR(\"Export\"));",
-                "replace": "set_title(TTR(\"Export With Godot Secure\"));"
+                "replace": "set_title(TTR(\"Export With Godot Secure (Camellia-256)\"));"
             }
         ]
     },
@@ -486,34 +487,54 @@ if __name__ == "__main__":
     else:
         # Too many arguments provided
         print("\nUsage: python Godot_Secure.py <godot_source_root>")
-        exit = input("\nPress Enter key to exit...")
+        try:
+            exit = input("\nPress Enter key to exit...")
+        except EOFError:
+            pass
         sys.exit(1)
         
 
     # Check for required Godot source components
     core_dir = os.path.join(godot_root, "core")
     sconstruct_file = os.path.join(godot_root, "SConstruct")
+    
+    # Get Current Encryption Key From Enviroment
+    try:
+        encKey = os.environ["SCRIPT_AES256_ENCRYPTION_KEY"]
+    except:
+        encKey = "Can't Fetch Your Enviroment Variable \"SCRIPT_AES256_ENCRYPTION_KEY\""
 
     if not (os.path.isdir(core_dir) and os.path.isfile(sconstruct_file)):
         print(f"{LogColors.FAIL}Error: No valid Godot Source Detected in the Specified Directory.{LogColors.ENDC}")
-        exit = input("\nPress Enter key to exit...")
+        try:
+            exit = input("\nPress Enter key to exit...")
+        except EOFError:
+            pass
         sys.exit(1)
 
     print(f"\nUsing Godot Source Root: {godot_root}")
     confirm = input(f"\n\n ⚠   {LogColors.WARNING}Start Godot Secure Operations on Godot Source Root {LogColors.ENDC}{LogColors.FAIL}(y/n)?{LogColors.ENDC}: ").strip().lower()
     if not (confirm == 'y' or confirm == 'yes'):
         print("Closing Setup...")
-        exit = input("\nPress Enter key to exit...")
+        try:
+            exit = input("\nPress Enter key to exit...")
+        except EOFError:
+            pass
         sys.exit(1)
         
     print(f"\n\n{LogColors.HEADER}=== Applying Camellia Encryption For Godot ==={LogColors.ENDC}")
     apply_modifications(godot_root)
     print(f"\n{LogColors.HEADER}=== Operation Complete (View Logs For Info) ==={LogColors.ENDC}\n")
     if fileCreated == True:
-        print(f"{LogColors.BOLD} Security Token:{LogColors.ENDC} {token_hex}")
-        print_warning(f"{LogColors.WARNING} Keep this token secret - it's required for decryption!{LogColors.ENDC}")
-        print_success(f"{LogColors.OKGREEN} Build is now cryptographically unique{LogColors.ENDC}")
-        print_info(f"{LogColors.OKGREEN} Old Key Backup created at: {LogColors.ENDC}{LogColors.BOLD}{backup_path}{LogColors.ENDC}\n")
+        print(f"{LogColors.BOLD} Security Token:{LogColors.ENDC} {token_hex}\n")
+        print(f"{LogColors.WARNING} Encryption Key: {LogColors.FAIL}{encKey}{LogColors.ENDC}")
+        print_warning(f"{LogColors.WARNING} Security Token and Encryption Key are different. Use {LogColors.FAIL}\"Encryption Key\"{LogColors.WARNING} During Export!{LogColors.ENDC}")
+        print_success(f"{LogColors.OKGREEN} Build is now Cryptographically Unique{LogColors.ENDC}")
+        if not (backup_path == None):
+            print_info(f"{LogColors.OKGREEN} Old Key Backup Created at: {LogColors.ENDC}{LogColors.BOLD}{backup_path}{LogColors.ENDC}\n")
     
-    exit = input("\nPress Enter key to exit...")
+    try:
+        exit = input("\nPress Enter key to exit...")
+    except EOFError:
+        pass
     sys.exit(1)
