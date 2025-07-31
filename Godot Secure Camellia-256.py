@@ -59,13 +59,13 @@ backup_path = None
 MODIFICATIONS = [
     #Pre -Steps:
     {
-        "file": "core/core_builders.py",
+        "file": "version.py",
         "operations": [
             {
                 "type": "replace_line",
                 "description": "Modify Godot title To add Godot Secure",
-                "find": "#define GODOT_VERSION_NAME \"{name}\"",
-                "replace": "#define GODOT_VERSION_NAME \"{name} (With Godot Secure)\""
+                "find": "name = \"Godot Engine\"",
+                "replace": "name = \"Godot Engine (With Godot Secure)\""
             }
         ]
     },
