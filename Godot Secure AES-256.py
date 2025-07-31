@@ -54,23 +54,17 @@ token_c_array = ', '.join([f'0x{b:02X}' for b in security_token])
 baseHeader = generate_magic_header(baseTag)
 encHeader = generate_magic_header(encTag)
 fileCreated = True
-backup_path = None
 
 MODIFICATIONS = [
     #Pre -Steps:
     {
-        "file": "version.py",
+        "file": "editor/editor_node.cpp",
         "operations": [
             {
                 "type": "replace_line",
                 "description": "Modify Godot title To add Godot Secure",
-<<<<<<< HEAD
-                "find": "name = \"Godot Engine\"",
-                "replace": "name = \"Godot Engine (With Godot Secure)\""
-=======
                 "find": "DisplayServer::get_singleton()->window_set_title(title + String(\" - \") + GODOT_VERSION_NAME);",
-                "replace": "DisplayServer::get_singleton()->window_set_title(title + String(\" - \") + GODOT_VERSION_NAME + String(\" (With Godot Secure)\");"
->>>>>>> parent of 62d8976 (Add missing ")" in replace.)
+                "replace": "DisplayServer::get_singleton()->window_set_title(title + String(\" - \") + GODOT_VERSION_NAME + String(\" (With Godot Secure)\"));"
             }
         ]
     },
@@ -388,10 +382,7 @@ if __name__ == "__main__":
     else:
         # Too many arguments provided
         print("\nUsage: python Godot_Secure.py <godot_source_root>")
-        try:
-            exit = input("\nPress Enter key to exit...")
-        except EOFError:
-            pass
+        exit = input("\nPress Enter key to exit...")
         sys.exit(1)
         
 
@@ -401,20 +392,14 @@ if __name__ == "__main__":
 
     if not (os.path.isdir(core_dir) and os.path.isfile(sconstruct_file)):
         print(f"{LogColors.FAIL}Error: No valid Godot Source Detected in the Specified Directory.{LogColors.ENDC}")
-        try:
-            exit = input("\nPress Enter key to exit...")
-        except EOFError:
-            pass
+        exit = input("\nPress Enter key to exit...")
         sys.exit(1)
 
     print(f"\nUsing Godot Source Root: {godot_root}")
     confirm = input(f"\n\n ⚠   {LogColors.WARNING}Start Godot Secure Operations on Godot Source Root {LogColors.ENDC}{LogColors.FAIL}(y/n)?{LogColors.ENDC}: ").strip().lower()
     if not (confirm == 'y' or confirm == 'yes'):
         print("Closing Setup...")
-        try:
-            exit = input("\nPress Enter key to exit...")
-        except EOFError:
-            pass
+        exit = input("\nPress Enter key to exit...")
         sys.exit(1)
         
     print(f"\n\n{LogColors.HEADER}=== Applying Enhanced AES Encryption For Godot ==={LogColors.ENDC}")
@@ -424,16 +409,7 @@ if __name__ == "__main__":
         print(f"{LogColors.BOLD} Security Token:{LogColors.ENDC} {token_hex}")
         print_warning(f"{LogColors.WARNING} Keep this token secret - it's required for decryption!{LogColors.ENDC}")
         print_success(f"{LogColors.OKGREEN} Build is now cryptographically unique{LogColors.ENDC}")
-        if not (backup_path == None):
-            print_info(f"{LogColors.OKGREEN} Old Key Backup created at: {LogColors.ENDC}{LogColors.BOLD}{backup_path}{LogColors.ENDC}\n")
+        print_info(f"{LogColors.OKGREEN} Old Key Backup created at: {LogColors.ENDC}{LogColors.BOLD}{backup_path}{LogColors.ENDC}\n")
     
-<<<<<<< HEAD
-    try:
-        exit = input("\nPress Enter key to exit...")
-    except EOFError:
-        pass
-    sys.exit(1)
-=======
     exit = input("\nPress Enter key to exit...")
     sys.exit(1)
->>>>>>> parent of 62d8976 (Add missing ")" in replace.)
