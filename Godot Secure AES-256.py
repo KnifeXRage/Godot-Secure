@@ -64,8 +64,8 @@ MODIFICATIONS = [
             {
                 "type": "replace_line",
                 "description": "Modify Godot title To add Godot Secure",
-                "find": "name = "Godot Engine"",
-                "replace": "name = "Godot Engine (With Godot Secure)""
+                "find": "name = \"Godot Engine\"",
+                "replace": "name = \"Godot Engine (With Godot Secure)\""
             }
         ]
     },
