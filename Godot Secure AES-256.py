@@ -59,7 +59,7 @@ backup_path = None
 MODIFICATIONS = [
     #Pre -Steps:
     {
-        "file": "core/core_builders.py",
+        "file": "version.py",
         "operations": [
             {
                 "type": "replace_line",
