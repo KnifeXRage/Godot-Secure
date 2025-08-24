@@ -5,9 +5,9 @@
 
 ![Godot Engine Logo](https://github.com/KnifeXRage/Godot-Secure/blob/main/Godot%20Secure.png)
 
-## Overview
+## Description
 
-**Godot Secure** transforms your Godot engine into a fortress for game assets. By integrating **Camellia-256 / AES-256** encryption with a **unique security token system**, this solution creates a cryptographically **unique engine build** that prevents generic decryption tools from accessing your game assets.
+**Godot Secure** is a Simple Python Script That modify the Godot Source Code Automatically, to integrate **Camellia-256 / AES-256** encryption with a **unique security token system**. This solution creates a cryptographically **unique engine build** that prevents generic decryption tools from accessing your game assets.
 
 ### *Effortless Security for Godot Games*
 >This script enhances your Godot engine with Camellia/AES encryption and a unique security token system with just one command. Unlike standard encryption, this creates a custom Godot build that's cryptographically unique to you, preventing universal decryption tools from working with your game assets.
@@ -20,7 +20,7 @@
 - ⚡ **Automated Setup**: One-command modification of Godot source
 - 💾 **No external dependencies**: Everything included
 
-## Why Godot Secure?
+## Features
 
 Standard Godot encryption has known vulnerabilities. Our solution:
 
