@@ -20,7 +20,7 @@
 - ⚡ **Automated Setup**: One-command modification of Godot source
 - 💾 **No external dependencies**: Everything included
 
-## Features
+## Difference
 
 Standard Godot encryption has known vulnerabilities. Our solution:
 
