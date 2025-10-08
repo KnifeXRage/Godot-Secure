@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/KnifeXRage/Godot-Secure/blob/main/LICENSE)
 <a href='https://ko-fi.com/V7V41FR21F' target='_blank'><img height='21' style='border:0px;height:21px;' src='https://storage.ko-fi.com/cdn/kofi5.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
-![Godot Engine Logo](https://github.com/KnifeXRage/Godot-Secure/blob/main/Logos/Godot%20Secure.png)
+![Godot Secure Logo](https://github.com/KnifeXRage/Godot-Secure/blob/main/Logos/Godot%20Secure.png)
 
 ## Description
 
