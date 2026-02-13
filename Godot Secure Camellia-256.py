@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import random
 import string
@@ -44,6 +45,36 @@ def print_operation(message):
 
 def print_warning(message):
     print(f"\n{LogColors.WARNING} ⚠ {LogColors.ENDC} {message}")
+# Version helpers
+def version_tuple(version_str) -> tuple:
+    # Convert version string (e.g., '4.6') to numeric tuple (4, 6)
+    try:
+        parts = version_str.split('.')
+        return tuple(int(p) for p in parts)
+    except:
+        return (4, 6)  # default to 4.6+ for resilience
+
+def should_apply_operation(op, major_version, minor_version) -> bool:
+    # Filters operations based on version constraints
+    # Examples:
+    #   version_min: 4.6,  applies to 4.6 and newer
+    #   version_max: 4.5, applies to 4.5 and older
+    #   Both: 4.3 + 4.5, applies only to 4.3-4.5 range
+    current_version = (major_version, minor_version)
+    
+    # Reject if current version is below minimum required
+    if "version_min" in op:
+        min_version = version_tuple(op["version_min"])
+        if current_version < min_version:
+            return False
+    
+    # Reject if current version is above maximum supported
+    if "version_max" in op:
+        max_version = version_tuple(op["version_max"])
+        if current_version > max_version:
+            return False
+    
+    return True
 
 # Generate unique identifiers
 baseTag = generate_random_tag()
@@ -176,12 +207,55 @@ MODIFICATIONS = [
             {
                 "type": "replace_block",
                 "description": "Add token obfuscation for encryption",
+                "version_min": "4.6", # applies to 4.6 and everything above
                 "find": [
                     "CryptoCore::AESContext ctx;",
                     "ctx.set_encode_key(key.ptrw(), 256);",
                     "",
                     "if (use_magic) {",
+                    "    file->store_32(ENCRYPTED_HEADER_MAGIC);",
+                    "}",
+                    "",
+                    "file->store_buffer(hash, 16);",
+                    "file->store_64(data.size());",
+                    "file->store_buffer(iv.ptr(), 16);",
+                    "",
+                    "ctx.encrypt_cfb(len, iv.ptrw(), compressed.ptr(), compressed.ptr());"
+                ],
+                "replace": [
+                    "CryptoCore::CamelliaContext ctx;",
+                    "",
+                    "    // Apply security token to key",
+                    "    Vector<uint8_t> token_key;",
+                    "    token_key.resize(32);",
+                    "    const uint8_t *key_ptr = key.ptr();",
+                    "    for (int i = 0; i < 32; i++) {",
+                    "        token_key.write[i] = key_ptr[i] ^ Security::TOKEN[i];",
+                    "    }",
+                    "",
+                    "    ctx.set_encode_key(token_key.ptrw(), 256);",
+                    "",
+                    "if (use_magic) {",
                     "file->store_32(ENCRYPTED_HEADER_MAGIC);",
+                    "}",
+                    "",
+                    "file->store_buffer(hash, 16);",
+                    "file->store_64(data.size());",
+                    "file->store_buffer(iv.ptr(), 16);",
+                    "",
+                    "ctx.encrypt_cfb(len, iv.ptrw(), compressed.ptr(), compressed.ptr());"
+                ]
+            },
+            {
+                "type": "replace_block",
+                "description": "Add token obfuscation for encryption (pre-4.6)",
+                "version_max": "4.5", # applies to 4.5 and everything below
+                "find": [
+                    "CryptoCore::AESContext ctx;",
+                    "ctx.set_encode_key(key.ptrw(), 256);",
+                    "",
+                    "if (use_magic) {",
+                    "    file->store_32(ENCRYPTED_HEADER_MAGIC);",
                     "}",
                     "",
                     "file->store_buffer(hash, 16);",
@@ -326,6 +400,29 @@ def apply_modifications(root_dir):
     print_info(f"Randomly Generated PACK_HEADER_MAGIC : {baseHeader} //Generated Tag : {baseTag}")
     print_info(f"Randomly Generated ENCRYPTED_HEADER_MAGIC : {encHeader} //Generated Tag : {encTag}")
     print_info(f"Security Token: {token_hex}")
+
+    major_version = 4
+    minor_version = 6 # Default latest version of Godot for resilience
+
+    if os.path.exists("version.py"):
+        try:
+            with open("version.py", "r") as f:
+                file_content = f.read()
+
+            match_major = re.search(r"major\s*=\s*(\d+)", file_content)
+            match_minor = re.search(r"minor\s*=\s*(\d+)", file_content)
+
+            if match_minor and match_major:
+                minor_version = int(match_minor.group(1))
+                major_version = int(match_major.group(1))
+                print_info(f"Godot version detected: {major_version}.{minor_version}")
+            else:
+                print_error(f"Could not read version.py, assuming Godot {major_version}.{minor_version}+")
+        except Exception as e:
+            print_error(f"Error reading version.py: {e}, assuming Godot {major_version}.{minor_version}+")
+    else:
+        print_error(f"version.py not found, assuming Godot {major_version}.{minor_version}+")
+
     step = 0
     for mod in MODIFICATIONS:
         file_path = os.path.join(root_dir, mod["file"])
@@ -384,6 +481,9 @@ def apply_modifications(root_dir):
 
         modified = False
         for op in mod["operations"]:
+            # Filter operations based on Godot version
+            if not should_apply_operation(op, major_version, minor_version):
+                continue
             op_type = op["type"]
             description = op.get("description", "")
             print_operation(f"Operation: {description}. (Type: {op_type})")
