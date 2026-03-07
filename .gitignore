@@ -1,0 +1,4 @@
+# Godot-Secure .gitignore config file
+
+# Folders:
+.vscode/

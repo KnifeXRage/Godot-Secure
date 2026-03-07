@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/KnifeXRage/Godot-Secure/blob/main/LICENSE)
 <a href='https://ko-fi.com/V7V41FR21F' target='_blank'><img height='21' style='border:0px;height:21px;' src='https://storage.ko-fi.com/cdn/kofi5.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
-![Godot Secure Logo](https://github.com/KnifeXRage/Godot-Secure/blob/main/Logos/PNGs/Godot%20Secure.png)
+![Godot Secure Logo](/Logos/PNGs/Godot%20Secure.png)
 
 ## Description
 
@@ -89,17 +89,17 @@ python godot_secure.py godot/
 ### Step 4: Compile Godot Engine and Export Templates
 ```bash
 # For Engine (Must REQUIRED):
-scons platform=windows target=editor use_llvm=yes use_mingw=yes # Example for Windows
-scons platform=linuxbsd target=editor use_llvm=yes use_mingw=yes # Example for Linux BSD
-scons platform=macos target=editor use_llvm=yes use_mingw=yes # Example for MacOS
+scons platform=windows target=editor use_mingw=yes # Example for Windows
+scons platform=linuxbsd target=editor use_mingw=yes # Example for Linux BSD
+scons platform=macos target=editor use_mingw=yes # Example for MacOS
 
 # For Export Templates (Must REQUIRED):
-scons platform=windows target=template_debug use_llvm=yes use_mingw=yes
-scons platform=windows target=template_release use_llvm=yes use_mingw=yes
+scons platform=windows target=template_debug use_mingw=yes
+scons platform=windows target=template_release use_mingw=yes
 ...
 
 ```
-> Build others Templates like these too and use `platform=macos` or `platform=linuxbsd` to build for *MacOS* or *Linux BSD*, Also use `use_llvm=yes use_mingw=yes` for faster builds!
+> Build others Templates like these too and use `platform=macos` or `platform=linuxbsd` to build for *MacOS* or *Linux BSD*, Also use `use_llvm=yes`  or `use_mingw=yes` for faster builds!
 
 
 # How It Works
@@ -111,8 +111,22 @@ The script makes these key modifications:
    - Creates security token embedded in engine binary
 
 2. **Key Protection**
-   - `Actual Key = (Input Key) XOR (Security Token)`
+   - Without Advanced Key Derivation Enabled: 
+       - `token_key.write[i] = key_ptr[i] ^ Security::TOKEN[i];`
+         OR
+         `Actual Key = (Input Key) XOR (Security Token)`
    - Token exists only in compiled binary
+3. **If Advanced Key Derivation Enabled**
+   - Script creates a long totally unique key derivation formula using different mathematical operations.
+   - That formula will be used for both encryption and decryption and is totally unique each time you compile engine and templates with it.
+   - Examples of some generated formulas using this algorithm:
+      ```bash
+      1. token_key.write[i] = (uint8_t)(((((key_ptr[i] & Security::TOKEN[i]) + key_ptr[i]) ^ 151) ^ key_ptr[i]));
+      2. token_key.write[i] = (uint8_t)(((((((((key_ptr[i] ^ Security::TOKEN[i]) + key_ptr[i]) ^ 106) + key_ptr[i]) ^ 138) << 6) | ((((((key_ptr[i] ^ Security::TOKEN[i]) + key_ptr[i]) ^ 106) + key_ptr[i]) ^ 138) >> 2)) | Security::TOKEN[i]));
+      3. token_key.write[i] = (uint8_t)(((((Security::TOKEN[i] & key_ptr[i]) + Security::TOKEN[i]) ^ Security::TOKEN[i]) ^ Security::TOKEN[i]));
+      4. token_key.write[i] = (uint8_t)((((((((((((key_ptr[i] << 7) | (key_ptr[i] >> 1)) ^ Security::TOKEN[i]) + key_ptr[i]) ^ 242) << 2) | ((((((key_ptr[i] << 7) | (key_ptr[i] >> 1)) ^ Security::TOKEN[i]) + key_ptr[i]) ^ 242) >> 6)) + Security::TOKEN[i]) ^ 126) << 6) | ((((((((((key_ptr[i] << 7) | (key_ptr[i] >> 1)) ^ Security::TOKEN[i]) + key_ptr[i]) ^ 242) << 2) | ((((((key_ptr[i] << 7) | (key_ptr[i] >> 1)) ^ Security::TOKEN[i]) + key_ptr[i]) ^ 242) >> 6)) + Security::TOKEN[i]) ^ 126) >> 2)));
+      ```
+   - _NOTE:_ This may increase your Game Loading time a little bit but it will make your actual key `MUCH HARDER` to obtain using automated tools. And it will make your Engine build completely unique.
 
 ## Troubleshooting
 
@@ -125,6 +139,7 @@ The script makes these key modifications:
 **Compilation errors?**
 - Clean build: `scons --clean`
 - Ensure all submodules: `git submodule update --init`
+- Use `Godot-Secure` Script only once on _Godot Source Code_. Using script multiple times on same source code can cause **Compilation Errors!**. So, always refresh Your Godot source code before running the script on it.
 
 ### Common Issues
 1. **File not found errors**: Ensure correct Godot source path
