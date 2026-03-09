@@ -1,3 +1,3 @@
-## v4.x.x - v4.5.x
+## v4.6.x - Latest
 
-Scripts that are compatible with godot engine version `v4.5.x` and Later
+Scripts that are compatible with godot engine version `v4.6.x` or Later.
