@@ -161,8 +161,8 @@ except:
     encKey = "Can't Fetch Your Enviroment Variable \"SCRIPT_AES256_ENCRYPTION_KEY\""
 
 if not (os.path.isdir(core_dir) and os.path.isfile(sconstruct_file)):
-    print(f"{LogColors.FAIL}{save_log("Error: No valid Godot Source Detected in the Specified Directory.")}{LogColors.ENDC}")
-    try:
+    log = save_log("Error: No valid Godot Source Detected in the Specified Directory.")
+    print(f"{LogColors.FAIL}{log}{LogColors.ENDC}")
         exit = input("\nPress Enter key to exit...")
     except EOFError:
         pass
@@ -522,7 +522,8 @@ def apply_modifications(root_dir):
             print_warning(f"No changes made to file (Step {step})")
 
 if __name__ == "__main__":
-    print(f"\n\n{LogColors.HEADER}{save_log("\n=== Applying Enhanced AES Encryption For Godot ===")}{LogColors.ENDC}")
+    log = save_log("\n=== Applying Enhanced AES Encryption For Godot ===")
+    print(f"\n\n{LogColors.HEADER}{log}{LogColors.ENDC}")
     apply_modifications(godot_root)
     print(f"\n{LogColors.HEADER}=== Operation Complete (View Logs For Info) ==={LogColors.ENDC}\n")
     if fileCreated == True:

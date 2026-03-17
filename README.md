@@ -36,7 +36,7 @@ Standard Godot encryption has known vulnerabilities. Our solution:
 ## Requirements
 
 1. **Godot Source Code** (4.x recommended)
-2. **Python 3.6+**
+2. **Python 3.10+**
 3. **OpenSSL** (for key generation)
 4. **Build Tools** (SCons, compilers)
 
@@ -131,7 +131,7 @@ The script makes these key modifications:
 ## Troubleshooting
 
 **Script not working?**
-- Ensure Python 3.6+ installed
+- Ensure Python 3.10+ installed
 - Verify correct Godot source path
 - Run with absolute path if needed:  
   `python godot_secure.py /path/to/godot_source`
