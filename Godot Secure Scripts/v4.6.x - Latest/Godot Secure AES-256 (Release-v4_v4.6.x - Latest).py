@@ -163,6 +163,7 @@ except:
 if not (os.path.isdir(core_dir) and os.path.isfile(sconstruct_file)):
     log = save_log("Error: No valid Godot Source Detected in the Specified Directory.")
     print(f"{LogColors.FAIL}{log}{LogColors.ENDC}")
+    try:
         exit = input("\nPress Enter key to exit...")
     except EOFError:
         pass
