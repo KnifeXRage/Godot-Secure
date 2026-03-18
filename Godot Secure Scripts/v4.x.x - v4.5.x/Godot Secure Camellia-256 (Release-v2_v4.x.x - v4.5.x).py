@@ -4,6 +4,9 @@ import random
 import string
 import binascii
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from util.backup import backup
+
 class LogColors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
@@ -371,7 +374,9 @@ def apply_modifications(root_dir):
                         print_error(f"Failed to write file: {e}")
             continue
 
-        
+        else:
+            backup(file_path)
+            
         # Handle file modifications
         if not os.path.exists(file_path):
             print_error(f"File not found: {file_path}")
