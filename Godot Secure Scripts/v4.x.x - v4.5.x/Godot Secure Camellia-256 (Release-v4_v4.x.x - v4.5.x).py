@@ -6,9 +6,6 @@ import binascii
 import secrets
 import datetime
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from util.backup import backup
-
 class LogColors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
@@ -130,6 +127,12 @@ fileCreated = True
 backup_path = None
 current_dt = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
 logFileName = f"Log-{current_dt}-Godot-Secure-Camellia.txt"
+
+# Backup Properties
+quiz_override = False
+override_backup = True
+not_modify_on_error = True
+track_backup_file = set()
 
 
 # Start Script Startup Operations
@@ -475,6 +478,8 @@ MODIFICATIONS = [
 ]
 
 def apply_modifications(root_dir):
+    global override_backup, quiz_override
+
     print_info(f"Generated PACK_HEADER_MAGIC : {baseHeader} //Tag : {baseTag}")
     print_info(f"Generated ENCRYPTED_HEADER_MAGIC : {encHeader} //Tag : {encTag}")
     print_info(f"Security Token: {token_hex}")
@@ -525,13 +530,40 @@ def apply_modifications(root_dir):
             continue
 
         
-        else:
-            backup(file_path)
-            
         # Handle file modifications
         if not os.path.exists(file_path):
             print_error(f"File not found: {file_path}")
             continue
+        else:
+            local_backup = file_path + ".backup"
+
+            if not (local_backup in track_backup_file):
+                track_backup_file.add(local_backup)
+                create_backup = True
+
+                if os.path.exists(local_backup):
+                    if not quiz_override:
+                        quiz_override = True
+                        print_warning(f"Backup of origins file already exists")
+                        override_backup = input("   Do you want to overwrite it? (y/n): ").strip().lower()
+                        if not (override_backup == 'y' or override_backup == 'yes'):
+                            override_backup = False
+                    
+                    create_backup = override_backup
+
+                if create_backup:
+                    try:
+                        with open(file_path, 'r') as file0:
+                            content = file0.read()
+                            with open(local_backup, "w") as file1:
+                                file1.write(content)
+                            print_success(f"Backup File created: {local_backup}")
+                    except Exception as e:
+                        print_error(f"Failed to created backup of origin file: {e}")
+
+                        if not_modify_on_error:
+                            print_operation("Skipping file modification.")
+                            continue
             
         print_info(f"Step {step} (Processing: {file_path}):")
         
