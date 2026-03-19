@@ -132,7 +132,7 @@ The script makes these key modifications:
 
 File backups are created automatically, to restore them to their original version:
 
-Run the `restore_backup.py` script that corresponds to the version folder you used.
+Run the `restore_backup.py` script located in `utils` folder.
 
 ## Troubleshooting
 
