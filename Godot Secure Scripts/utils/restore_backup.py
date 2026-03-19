@@ -2,7 +2,7 @@ import os
 import sys
 
 
-## File Paths identical to those of the Godot-Secure v4.6.x - Latest scripts.
+## File Paths identical to those of the Godot-Secure scripts.
 ## It is assumed that it may vary at some point in the version of Godot-Secure.
 
 MODIFICATIONS = [
