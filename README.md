@@ -128,7 +128,7 @@ The script makes these key modifications:
       ```
    - _NOTE:_ This may increase your Game Loading time a little bit but it will make your actual key `MUCH HARDER` to obtain using automated tools. And it will make your Engine build completely unique.
 
-# Restore Backup Files
+## Restore Backup Files
 
 File backups are created automatically, to restore them to their original version:
 
