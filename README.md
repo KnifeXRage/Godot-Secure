@@ -52,6 +52,8 @@ Standard Godot encryption has known vulnerabilities. Our solution:
 >Must Read Godot's Official Documentation:
 >🔗[View Official Documentation](https://docs.godotengine.org/en/stable/contributing/development/compiling/index.html)
 
+
+
 ### Step 1: Prepare Environment
 ```bash
 git clone https://github.com/godotengine/godot.git
@@ -84,6 +86,20 @@ python godot_secure.py /path/to/godot_source/
 
 #Example:
 python godot_secure.py godot/
+```
+
+### Alternative Step 3
+> You can use the friendly wizard's execution script.
+> Using: the file called `run`
+```bash
+# For Linux/macOS:
+use "run.sh"
+
+# For Window
+use "run.bat"
+
+# For Powershell
+use "run.ps1"
 ```
 
 ### Step 4: Compile Godot Engine and Export Templates
