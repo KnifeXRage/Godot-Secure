@@ -1,5 +1,7 @@
 import os
 import sys
+import re
+import hashlib
 import random
 import string
 import binascii
@@ -44,6 +46,11 @@ def generate_magic_header(tag: str, endian='little') -> str:
 
     hex_value = "0x" + ''.join(f"{ord(c):02X}" for c in tag)
     return hex_value
+
+def generate_random_gdtokenizer_seed(length: int = 64) -> str:
+    
+    # secrets.token_hex(n) returns a string of 2 * n hex characters
+    return secrets.token_hex(length // 2)
 
 def build_random_key_derivation():
     operands = ["key_ptr[i]", "Security::TOKEN[i]"]
@@ -119,6 +126,121 @@ def print_warning(message):
     save_log(f"\n[WARN] -   {message}")
     print(f"\n{LogColors.WARNING} ⚠ {LogColors.ENDC} {message}")
 
+def get_actual_tk_max(tokenizer_h_path):
+    if not os.path.exists(tokenizer_h_path):
+        raise FileNotFoundError(f"Could not locate gdscript_tokenizer.h at: {tokenizer_h_path}")
+
+    with open(tokenizer_h_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # Locate the enum Type block
+    match = re.search(r"enum\s+Type\s*\{([\s\S]*?)\bTK_MAX\b", content)
+    if not match:
+        raise ValueError("Could not find 'enum Type' containing 'TK_MAX' in gdscript_tokenizer.h")
+
+    body = re.sub(r"//.*", "", match.group(1))
+    tokens = [item.strip() for item in body.split(",") if item.strip()]
+    return len(tokens)
+
+
+def apply_buffer_scramble(filepath, buffer_seed):
+    
+    seed_hash = int(hashlib.md5(buffer_seed.encode()).hexdigest(), 16)
+    random.seed(seed_hash)
+    
+    if not os.path.exists(filepath):
+        print_error(f"File not found at {filepath}")
+        return False
+    
+    # Locate gdscript_tokenizer.h in the same directory
+    dir_name = os.path.dirname(filepath)
+    tokenizer_h_path = os.path.join(dir_name, "gdscript_tokenizer.h")
+
+    try:
+        actual_tk_max = get_actual_tk_max(tokenizer_h_path)
+        print_success(f"Auto-detected Token::TK_MAX = {actual_tk_max}")
+    except Exception as e:
+        print_error(f"Error parsing TK_MAX: {e}")
+        return False
+
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = f.read()
+        
+    # Create Backup of the original file
+    backup_path = filepath + ".backup"
+    try:
+        with open(backup_path, 'w', encoding='utf-8') as backup_file:
+            backup_file.write(content)
+        print_success(f"Backup created at: {backup_path}")
+    except Exception as e:
+        print_error(f"Failed to create backup: {e}")
+
+    # 1. Total buffer capacity is 128 to match TOKEN_MASK
+    buffer_capacity = 128
+    if actual_tk_max > buffer_capacity:
+        print_error(f"TK_MAX ({actual_tk_max}) exceeds TOKEN_MASK limit (127).")
+        return False
+
+    # We only shuffle tokens from 1 to actual_tk_max - 1.
+    active_tokens = list(range(1, actual_tk_max))
+    random.shuffle(active_tokens)
+
+    # 3. Reconstruct the full scrambled list with 0 pinned at the start
+    scrambled_tokens = [0] + active_tokens
+
+    # 4. Fill the remainder up to 128 with identity mappings
+    unused_padding = list(range(actual_tk_max, buffer_capacity))
+    scrambled_tokens += unused_padding
+
+    # 5. Construct the inverse map
+    inverse_map = [0] * buffer_capacity
+    for orig, scram in enumerate(scrambled_tokens):
+        inverse_map[scram] = orig
+
+    write_map_str = "static const uint8_t token_write_map[] = {" + ", ".join(map(str, scrambled_tokens)) + "};"
+    read_map_str = "static const uint8_t token_read_map[] = {" + ", ".join(map(str, inverse_map)) + "};"
+    map_injection = (
+        f"\n// Godot-Secure: Injected Token Maps (Auto-detected TK_MAX = {actual_tk_max})\n"
+        f"{write_map_str}\n{read_map_str}\n"
+    )
+
+    # 6. Inject Maps
+    version_pattern = r"(#define TOKENIZER_VERSION \d+)"
+    include_pattern = r'(#include\s+["<]gdscript_tokenizer_buffer\.h[">])'
+
+    if re.search(version_pattern, content):
+        content = re.sub(version_pattern, r"\1\n" + map_injection, content, count=1)
+    elif re.search(include_pattern, content):
+        content = re.sub(include_pattern, r"\1\n" + map_injection, content, count=1)
+    else:
+        print_error("Could not find suitable injection point (neither TOKENIZER_VERSION nor header include found).")
+        return False
+
+    # 7. Scramble Write Stream
+    target_write = "int token_type = p_token.type & TOKEN_MASK;"
+    replace_write = "int token_type = token_write_map[p_token.type] & TOKEN_MASK;"
+    if target_write not in content:
+        print_error("Could not find write stream target.")
+        return False
+    content = content.replace(target_write, replace_write)
+
+    # 8. Scramble Read Stream
+    target_read = "token.type = (Token::Type)(token_type & TOKEN_MASK);"
+    replace_read = "token.type = (Token::Type)token_read_map[token_type & TOKEN_MASK];"
+    if target_read not in content:
+        print_error("Could not find read stream target.")
+        return False
+    content = content.replace(target_read, replace_read)
+
+    # 9. Save the modified file
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(content)
+
+    print_info("Successfully patched gdscript_tokenizer_buffer.cpp!")
+    print_success(f"Used Randomizer Tokenizer Seed: {buffer_seed}")
+    save_log(f"\n      [✓] Generated Write Map: {write_map_str}\n      [✓] Generated Read Map: {read_map_str}")
+    return True
+
 
 # Generate unique identifiers
 godot_root = ""
@@ -128,6 +250,7 @@ encKey = ""
 baseTag = generate_random_tag()
 encTag = generate_random_tag()
 security_token = generate_random_token()
+gdtokenizer_seed = generate_random_gdtokenizer_seed()
 token_hex = binascii.hexlify(security_token).decode('utf-8')
 token_c_array = ', '.join([f'0x{b:02X}' for b in security_token])
 baseHeader = generate_magic_header(baseTag)
@@ -140,7 +263,7 @@ MODIFICATIONS = [] # Modification list (empty)
 fileCreated = True
 backup_path = None
 current_dt = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
-logFileName = f"Log-{current_dt}-Godot-Secure-AES.txt"
+logFileName = f"Log-{current_dt}-Godot-Secure-v6-Camellia.txt"
 
 # Backup Properties
 quiz_override = False
@@ -200,7 +323,7 @@ def start_setup():
             exit = input("\nPress Enter key to exit...")
         except EOFError:
             pass
-        sys.exit(1)
+        sys.exit(0)
         
     save_log(f"Start Godot Secure Operations on Godot Source Root (y/n)?: {confirm}")
 
@@ -226,6 +349,17 @@ def start_setup():
     if (confirm == 'y' or confirm == 'yes'):
         key_derivation_algorithm = build_random_key_derivation()
         save_log(f"    Generated Advanced Key Derivation Algorithm:\n            {key_derivation_algorithm}")
+    
+    confirm = input(f"\n\n ℹ  {LogColors.OKBLUE}Randomize GDScript Tokenizer [READ DOCUMENTATION]{LogColors.ENDC}{LogColors.FAIL}(y/n)?{LogColors.ENDC}: ").strip().lower()
+    save_log(f"\n[INFO] - Randomize GDScript Tokenizer (y/n)?: {confirm}")
+    if (confirm == 'y' or confirm == 'yes'):
+        confirm = str(input(f"     ℹ  Use Custom Seed for Randomization{LogColors.FAIL}(y/n)?{LogColors.ENDC}: "))
+        save_log(f"\n[INFO] - Use Custom Seed for Randomization (y/n)?: {confirm}")
+        if (confirm == 'y' or confirm == 'yes'):
+            global gdtokenizer_seed
+            gdtokenizer_seed = str(input("        Enter Custom Seed: "))
+            save_log(f"    Enter Custom Seed: {gdtokenizer_seed}")
+        apply_buffer_scramble(os.path.join(godot_root,"modules/gdscript/gdscript_tokenizer_buffer.cpp"),gdtokenizer_seed)
 
 
 def setup_modifications():
@@ -242,6 +376,7 @@ def setup_modifications():
         "CLOSE_BRACE": "}",
 
         "AES_CONTEXT": "CryptoCore::AESContext ctx;",
+        "CAMELLIA_CONTEXT": "CryptoCore::CamelliaContext ctx;",
 
         "TOKEN_COMMENT": "    // Apply security token to key",
         "TOKEN_VECTOR": "    Vector<uint8_t> token_key;",
@@ -250,8 +385,9 @@ def setup_modifications():
         "TOKEN_LOOP_START": "    for (int i = 0; i < 32; i++) {",
         "TOKEN_LOOP_END": "    }",
 
-        "SET_AES_KEY_DECRYPT": "    ctx.set_encode_key(token_key.ptrw(), 256); // Due to the nature of CFB, same key schedule is used for both encryption and decryption!",
-        "SET_AES_KEY_ENCRYPT": "    ctx.set_encode_key(token_key.ptrw(), 256);",
+        "SET_AES_KEY_DECRYPT": "ctx.set_encode_key(key.ptrw(), 256); // Due to the nature of CFB, same key schedule is used for both encryption and decryption!",
+        "SET_AES_KEY_ENCRYPT": "ctx.set_encode_key(key.ptrw(), 256);",
+        "SET_CAMELLIA_KEY": "    ctx.set_encode_key(token_key.ptrw(), 256);",
 
         "IF_USE_MAGIC": "if (use_magic) {",
         "STORE_MAGIC": "file->store_32(ENCRYPTED_HEADER_MAGIC);",
@@ -270,7 +406,7 @@ def setup_modifications():
         "PS-1R": 'name = "Godot Engine (With Godot Secure)"',
 
         "PS-2F": 'set_title(TTR("Export"));',
-        "PS-2R": 'set_title(TTR("Export With Godot Secure (AES-256)"));',
+        "PS-2R": 'set_title(TTR("Export With Godot Secure (Camellia-256)"));',
 
         # Step 0:
 
@@ -298,12 +434,89 @@ def setup_modifications():
         "S3-1F": '#include "file_access_encrypted.h"',
         "S3-1R": '#include "core/crypto/security_token.h"',
 
-        "S3-2F4": "ctx.set_encode_key(key.ptrw(), 256); // Due to the nature of CFB, same key schedule is used for both encryption and decryption!",
+        # Step 5:
+        "S5-1F": "};",
+        "S5-1R": [
+            "// Camellia-256 (via Mbed TLS)",
+            "class CamelliaContext {",
+            "private:",
+            "    void *ctx = nullptr;",
+            "",
+            "public:",
+            "    CamelliaContext();",
+            "    ~CamelliaContext();",
+            "",
+            "    Error set_encode_key(const uint8_t *p_key, size_t p_bits);",
+            "    Error set_decode_key(const uint8_t *p_key, size_t p_bits);",
+            "    Error encrypt_ecb(const uint8_t p_src[16], uint8_t r_dst[16]);",
+            "    Error decrypt_ecb(const uint8_t p_src[16], uint8_t r_dst[16]);",
+            "    Error encrypt_cbc(size_t p_length, uint8_t r_iv[16], const uint8_t *p_src, uint8_t *r_dst);",
+            "    Error decrypt_cbc(size_t p_length, uint8_t r_iv[16], const uint8_t *p_src, uint8_t *r_dst);",
+            "    Error encrypt_cfb(size_t p_length, uint8_t p_iv[16], const uint8_t *p_src, uint8_t *r_dst);",
+            "    Error decrypt_cfb(size_t p_length, uint8_t p_iv[16], const uint8_t *p_src, uint8_t *r_dst);",
+            "};",
+            ""
+        ],
 
-        # Step 4:
-
-        "S4-1F2": "ctx.set_encode_key(key.ptrw(), 256);",
-
+        # Step 6:
+        "S6-1F": "#include <mbedtls/aes.h>",
+        "S6-1R": "#include <mbedtls/camellia.h>",
+        "S6-2R": [
+            "// ----------------------------------------------------------------",
+            "// Camellia-256 implementation",
+            "",
+            "CryptoCore::CamelliaContext::CamelliaContext() {",
+            "    ctx = memalloc(sizeof(mbedtls_camellia_context));",
+            "    mbedtls_camellia_init((mbedtls_camellia_context *)ctx);",
+            "}",
+            "",
+            "CryptoCore::CamelliaContext::~CamelliaContext() {",
+            "    mbedtls_camellia_free((mbedtls_camellia_context *)ctx);",
+            "    memfree(ctx);",
+            "}",
+            "",
+            "Error CryptoCore::CamelliaContext::set_encode_key(const uint8_t *p_key, size_t p_bits) {",
+            "    int ret = mbedtls_camellia_setkey_enc((mbedtls_camellia_context *)ctx, p_key, p_bits);",
+            "    return ret ? FAILED : OK;",
+            "}",
+            "",
+            "Error CryptoCore::CamelliaContext::set_decode_key(const uint8_t *p_key, size_t p_bits) {",
+            "    int ret = mbedtls_camellia_setkey_dec((mbedtls_camellia_context *)ctx, p_key, p_bits);",
+            "    return ret ? FAILED : OK;",
+            "}",
+            "",
+            "Error CryptoCore::CamelliaContext::encrypt_ecb(const uint8_t p_src[16], uint8_t r_dst[16]) {",
+            "    int ret = mbedtls_camellia_crypt_ecb((mbedtls_camellia_context *)ctx, MBEDTLS_CAMELLIA_ENCRYPT, p_src, r_dst);",
+            "    return ret ? FAILED : OK;",
+            "}",
+            "",
+            "Error CryptoCore::CamelliaContext::decrypt_ecb(const uint8_t p_src[16], uint8_t r_dst[16]) {",
+            "    int ret = mbedtls_camellia_crypt_ecb((mbedtls_camellia_context *)ctx, MBEDTLS_CAMELLIA_DECRYPT, p_src, r_dst);",
+            "    return ret ? FAILED : OK;",
+            "}",
+            "",
+            "Error CryptoCore::CamelliaContext::encrypt_cbc(size_t p_length, uint8_t r_iv[16], const uint8_t *p_src, uint8_t *r_dst) {",
+            "    int ret = mbedtls_camellia_crypt_cbc((mbedtls_camellia_context *)ctx, MBEDTLS_CAMELLIA_ENCRYPT, p_length, r_iv, p_src, r_dst);",
+            "    return ret ? FAILED : OK;",
+            "}",
+            "",
+            "Error CryptoCore::CamelliaContext::decrypt_cbc(size_t p_length, uint8_t r_iv[16], const uint8_t *p_src, uint8_t *r_dst) {",
+            "    int ret = mbedtls_camellia_crypt_cbc((mbedtls_camellia_context *)ctx, MBEDTLS_CAMELLIA_DECRYPT, p_length, r_iv, p_src, r_dst);",
+            "    return ret ? FAILED : OK;",
+            "}",
+            "",
+            "Error CryptoCore::CamelliaContext::encrypt_cfb(size_t p_length, uint8_t p_iv[16], const uint8_t *p_src, uint8_t *r_dst) {",
+            "    size_t iv_off = 0;",
+            "    int ret = mbedtls_camellia_crypt_cfb128((mbedtls_camellia_context *)ctx, MBEDTLS_CAMELLIA_ENCRYPT, p_length, &iv_off, p_iv, p_src, r_dst);",
+            "    return ret ? FAILED : OK;",
+            "}",
+            "",
+            "Error CryptoCore::CamelliaContext::decrypt_cfb(size_t p_length, uint8_t p_iv[16], const uint8_t *p_src, uint8_t *r_dst) {",
+            "    size_t iv_off = 0;",
+            "    int ret = mbedtls_camellia_crypt_cfb128((mbedtls_camellia_context *)ctx, MBEDTLS_CAMELLIA_DECRYPT, p_length, &iv_off, p_iv, p_src, r_dst);",
+            "    return ret ? FAILED : OK;",
+            "}"
+        ]
     }
     
     # Version based modefications:
@@ -312,7 +525,7 @@ def setup_modifications():
     
     if godot_version_int >= 47:
         MODIFICATION_VALUES_DB["PS-2F"] = 'set_title(TTRC("Export"));'
-        MODIFICATION_VALUES_DB["PS-2R"] = 'set_title(TTRC("Export With Godot Secure (AES-256)"));'
+        MODIFICATION_VALUES_DB["PS-2R"] = 'set_title(TTRC("Export With Godot Secure (Camellia-256)"));'
 
     # Modifications to be made in source
     MODIFICATIONS = [
@@ -396,7 +609,7 @@ def setup_modifications():
             ]
         },
 
-        # Step 3: Modify AES Decryption + Token Integration
+        # Step 3: Replace AES with Camellia (Decrypt) + Token Integration
 
         {
             "file": "core/io/file_access_encrypted.cpp",
@@ -417,14 +630,14 @@ def setup_modifications():
                         MODIFICATION_VALUES_DB["OPEN_BRACE"],
                         MODIFICATION_VALUES_DB["AES_CONTEXT"],
                         MODIFICATION_VALUES_DB["BLANK_LINE"],
-                        MODIFICATION_VALUES_DB["S3-2F4"],
+                        MODIFICATION_VALUES_DB["SET_AES_KEY_DECRYPT"],
                         MODIFICATION_VALUES_DB["DECRYPT_CALL"],
                         MODIFICATION_VALUES_DB["CLOSE_BRACE"],
                     ],
 
                     "replace": [
                         MODIFICATION_VALUES_DB["OPEN_BRACE"],
-                        MODIFICATION_VALUES_DB["AES_CONTEXT"],
+                        MODIFICATION_VALUES_DB["CAMELLIA_CONTEXT"],
                         MODIFICATION_VALUES_DB["BLANK_LINE"],
                         MODIFICATION_VALUES_DB["TOKEN_COMMENT"],
                         MODIFICATION_VALUES_DB["TOKEN_VECTOR"],
@@ -434,7 +647,7 @@ def setup_modifications():
                         MODIFICATION_VALUES_DB["KEY_DERIVATION"],
                         MODIFICATION_VALUES_DB["TOKEN_LOOP_END"],
                         MODIFICATION_VALUES_DB["BLANK_LINE"],
-                        MODIFICATION_VALUES_DB["SET_AES_KEY_DECRYPT"],
+                        MODIFICATION_VALUES_DB["SET_CAMELLIA_KEY"],
                         MODIFICATION_VALUES_DB["DECRYPT_CALL"],
                         MODIFICATION_VALUES_DB["CLOSE_BRACE"],
                     ]
@@ -442,7 +655,7 @@ def setup_modifications():
             ]
         },
 
-        # Step 4: Modify AES Encryption + Token Integration
+        # Step 4: Replace AES with Camellia (Encrypt) + Token Integration
 
         {
             "file": "core/io/file_access_encrypted.cpp",
@@ -453,30 +666,6 @@ def setup_modifications():
 
                     "find": [
                         MODIFICATION_VALUES_DB["AES_CONTEXT"],
-                        MODIFICATION_VALUES_DB["S4-1F2"],
-                        MODIFICATION_VALUES_DB["BLANK_LINE"],
-                        MODIFICATION_VALUES_DB["IF_USE_MAGIC"],
-                        MODIFICATION_VALUES_DB["STORE_MAGIC"],
-                        MODIFICATION_VALUES_DB["CLOSE_BRACE"],
-                        MODIFICATION_VALUES_DB["BLANK_LINE"],
-                        MODIFICATION_VALUES_DB["STORE_HASH"],
-                        MODIFICATION_VALUES_DB["STORE_SIZE"],
-                        MODIFICATION_VALUES_DB["STORE_IV"],
-                        MODIFICATION_VALUES_DB["BLANK_LINE"],
-                        MODIFICATION_VALUES_DB["ENCRYPT_CALL"],
-                    ],
-
-                    "replace": [
-                        MODIFICATION_VALUES_DB["AES_CONTEXT"],
-                        MODIFICATION_VALUES_DB["BLANK_LINE"],
-                        MODIFICATION_VALUES_DB["TOKEN_COMMENT"],
-                        MODIFICATION_VALUES_DB["TOKEN_VECTOR"],
-                        MODIFICATION_VALUES_DB["TOKEN_RESIZE"],
-                        MODIFICATION_VALUES_DB["TOKEN_KEY_PTR"],
-                        MODIFICATION_VALUES_DB["TOKEN_LOOP_START"],
-                        MODIFICATION_VALUES_DB["KEY_DERIVATION"],
-                        MODIFICATION_VALUES_DB["TOKEN_LOOP_END"],
-                        MODIFICATION_VALUES_DB["BLANK_LINE"],
                         MODIFICATION_VALUES_DB["SET_AES_KEY_ENCRYPT"],
                         MODIFICATION_VALUES_DB["BLANK_LINE"],
                         MODIFICATION_VALUES_DB["IF_USE_MAGIC"],
@@ -488,7 +677,64 @@ def setup_modifications():
                         MODIFICATION_VALUES_DB["STORE_IV"],
                         MODIFICATION_VALUES_DB["BLANK_LINE"],
                         MODIFICATION_VALUES_DB["ENCRYPT_CALL"],
+                    ],
+
+                    "replace": [
+                        MODIFICATION_VALUES_DB["CAMELLIA_CONTEXT"],
+                        MODIFICATION_VALUES_DB["BLANK_LINE"],
+                        MODIFICATION_VALUES_DB["TOKEN_COMMENT"],
+                        MODIFICATION_VALUES_DB["TOKEN_VECTOR"],
+                        MODIFICATION_VALUES_DB["TOKEN_RESIZE"],
+                        MODIFICATION_VALUES_DB["TOKEN_KEY_PTR"],
+                        MODIFICATION_VALUES_DB["TOKEN_LOOP_START"],
+                        MODIFICATION_VALUES_DB["KEY_DERIVATION"],
+                        MODIFICATION_VALUES_DB["TOKEN_LOOP_END"],
+                        MODIFICATION_VALUES_DB["BLANK_LINE"],
+                        MODIFICATION_VALUES_DB["SET_CAMELLIA_KEY"],
+                        MODIFICATION_VALUES_DB["BLANK_LINE"],
+                        MODIFICATION_VALUES_DB["IF_USE_MAGIC"],
+                        MODIFICATION_VALUES_DB["STORE_MAGIC"],
+                        MODIFICATION_VALUES_DB["CLOSE_BRACE"],
+                        MODIFICATION_VALUES_DB["BLANK_LINE"],
+                        MODIFICATION_VALUES_DB["STORE_HASH"],
+                        MODIFICATION_VALUES_DB["STORE_SIZE"],
+                        MODIFICATION_VALUES_DB["STORE_IV"],
+                        MODIFICATION_VALUES_DB["BLANK_LINE"],
+                        MODIFICATION_VALUES_DB["ENCRYPT_CALL"],
                     ]
+                }
+            ]
+        },
+
+        # Step 5: Add Camellia Class
+
+        {
+            "file": "core/crypto/crypto_core.h",
+            "operations": [
+                {
+                    "type": "insert_after",
+                    "description": "Add CamelliaContext class",
+                    "find": MODIFICATION_VALUES_DB["S5-1F"],
+                    "replace": MODIFICATION_VALUES_DB["S5-1R"]
+                }
+            ]
+        },
+
+        # Step 6: Add Camellia Implementation
+
+        {
+            "file": "core/crypto/crypto_core.cpp",
+            "operations": [
+                {
+                    "type": "insert_after",
+                    "description": "Add Camellia include",
+                    "find": MODIFICATION_VALUES_DB["S6-1F"],
+                    "replace": MODIFICATION_VALUES_DB["S6-1R"]
+                },
+                {
+                    "type": "append",
+                    "description": "Add Camellia implementation",
+                    "replace": MODIFICATION_VALUES_DB["S6-2R"]
                 }
             ]
         }
@@ -614,13 +860,16 @@ def apply_modifications(root_dir):
                 find_lines = [ln.strip() for ln in op["find"]]
                 replace_lines = [ln + "\n" for ln in op["replace"]]
                 block_found = False
+                lines_found = set()
 
                 for i in range(len(lines) - len(find_lines) + 1):
                     match = True
                     for j in range(len(find_lines)):
                         if lines[i + j].strip() != find_lines[j]:
                             match = False
-                            break
+                            continue
+                        lines_found.add(j)
+                    
                     if match:
                         lines[i:i + len(find_lines)] = replace_lines
                         print_success(f"Block replaced starting at line {i+1}")
@@ -630,6 +879,12 @@ def apply_modifications(root_dir):
 
                 if not block_found:
                     print_error("Target block not found")
+                    for linesIndex in range(len(find_lines)):
+                        if linesIndex in lines_found:
+                            print(save_log(f"        ✓ [{linesIndex+1}] {find_lines[linesIndex]}"))
+                        else: print(save_log(f"        ✗ [{linesIndex+1}] {find_lines[linesIndex]}"))
+                    lines_found.clear()
+                    print(save_log("")) # Line Break
 
             elif op_type == "insert_after":
                 find = op["find"].strip()
@@ -686,7 +941,7 @@ if __name__ == "__main__":
     # Process Begains:
     start_setup()
     
-    log = save_log("\n=== Applying Enhanced AES Encryption For Godot ===")
+    log = save_log("\n=== Applying Enhanced Camellia Encryption For Godot ===")
     print(f"\n\n{LogColors.HEADER}{log}{LogColors.ENDC}")
     
     godot_version_int = int(get_godot_version(godot_root))
@@ -696,10 +951,11 @@ if __name__ == "__main__":
     print(f"\n{LogColors.HEADER}=== Operation Complete (View Logs For Info) ==={LogColors.ENDC}\n")
     if fileCreated == True:
         print(f"{LogColors.BOLD} Security Token:{LogColors.ENDC} {token_hex}\n")
+        print(f"{LogColors.BOLD} GDScript Tokenizer Seed: {LogColors.ENDC}{gdtokenizer_seed}\n")
         print(f"{LogColors.WARNING} Encryption Key: {LogColors.FAIL}{encKey}{LogColors.ENDC}")
         print_warning(f"{LogColors.WARNING} Security Token and Encryption Key are different. Use {LogColors.FAIL}\"Encryption Key\"{LogColors.WARNING} During Export!{LogColors.ENDC}")
         print_success(f"{LogColors.OKGREEN} Build is now Cryptographically Unique{LogColors.ENDC}")
-        save_log(f"\nSecurity Token: {token_hex}\nEncryption Key: {encKey}")
+        save_log(f"\nSecurity Token: {token_hex}\nGDScript Tokenizer Seed: {gdtokenizer_seed}\nEncryption Key: {encKey}\n")
         save_log(f"\n[WARN] - Security Token and Encryption Key are different. Use Encryption Key During Export!")
         if not (backup_path == None):
             save_log(f"\n[INFO] - Old Key Backup Created at: {backup_path}")
@@ -709,4 +965,4 @@ if __name__ == "__main__":
         exit = input("\nPress Enter key to exit...")
     except EOFError:
         pass
-    sys.exit(1)
+    sys.exit(0)

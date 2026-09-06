@@ -1,5 +1,5 @@
 # Godot Secure - Enhanced Asset Protection For Godot
-[![Godot Engine 4.x](https://img.shields.io/badge/Godot_Engine-4.x-blue)](https://godotengine.org/)
+[![Godot Engine 4.4.x](https://img.shields.io/badge/Godot_Engine-4.4.x-blue)](https://godotengine.org/)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/KnifeXRage/Godot-Secure/blob/main/LICENSE)
 <a href='https://ko-fi.com/V7V41FR21F' target='_blank'><img height='21' style='border:0px;height:21px;' src='https://storage.ko-fi.com/cdn/kofi5.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
@@ -35,9 +35,9 @@ Standard Godot encryption has known vulnerabilities. Our solution:
 
 ## Requirements
 
-1. **Godot Source Code** (4.x recommended)
+1. **Godot Source Code** (4.4.x and Above recommended)
 2. **Python 3.10+**
-3. **OpenSSL** (for key generation)
+3. **OpenSSL** (for key generation) `Optional`
 4. **Build Tools** (SCons, compilers)
 
 ## Download Godot Secure: 🔗[Download](https://github.com/KnifeXRage/Godot-Secure/releases/)
@@ -99,7 +99,7 @@ scons platform=windows target=template_release use_mingw=yes
 ...
 
 ```
-> Build others Templates like these too and use `platform=macos` or `platform=linuxbsd` to build for *MacOS* or *Linux BSD*, Also use `use_llvm=yes`  or `use_mingw=yes` for faster builds!
+> Build others Templates like these too and use `platform=macos` or `platform=linuxbsd` to build for *MacOS* or *Linux BSD*.
 
 
 # How It Works
@@ -116,7 +116,7 @@ The script makes these key modifications:
          OR
          `Actual Key = (Input Key) XOR (Security Token)`
    - Token exists only in compiled binary
-3. **If Advanced Key Derivation Enabled**
+3. **If `Advanced Key Derivation` Enabled**
    - Script creates a long totally unique key derivation formula using different mathematical operations.
    - That formula will be used for both encryption and decryption and is totally unique each time you compile engine and templates with it.
    - Examples of some generated formulas using this algorithm:
@@ -127,6 +127,18 @@ The script makes these key modifications:
       4. token_key.write[i] = (uint8_t)((((((((((((key_ptr[i] << 7) | (key_ptr[i] >> 1)) ^ Security::TOKEN[i]) + key_ptr[i]) ^ 242) << 2) | ((((((key_ptr[i] << 7) | (key_ptr[i] >> 1)) ^ Security::TOKEN[i]) + key_ptr[i]) ^ 242) >> 6)) + Security::TOKEN[i]) ^ 126) << 6) | ((((((((((key_ptr[i] << 7) | (key_ptr[i] >> 1)) ^ Security::TOKEN[i]) + key_ptr[i]) ^ 242) << 2) | ((((((key_ptr[i] << 7) | (key_ptr[i] >> 1)) ^ Security::TOKEN[i]) + key_ptr[i]) ^ 242) >> 6)) + Security::TOKEN[i]) ^ 126) >> 2)));
       ```
    - _NOTE:_ This may increase your Game Loading time a little bit but it will make your actual key `MUCH HARDER` to obtain using automated tools. And it will make your Engine build completely unique.
+
+4. **If `Tokenizer Buffer Randomizer` Enabled**
+
+- Godot 4 exports GDScript as binary token streams (`.gdc`) instead of plain text. Standard decompilers read these files using Godot's public token list to reconstruct your source code.
+
+- **Working**:
+  1. The engine parses and runs GDScript normally in memory without touching its internal lookup tables or syntax rules.
+  2. When exporting to a `.pck` file, the engine swaps every token ID with a scrambled value using a custom write map before saving to disk.
+  3. When the exported game runs, your custom export template uses an inverse read map to restore the tokens back to their original values instantly.
+  4. Standard decompilers expect official Godot token IDs, so they read the scrambled bytes, misinterpret every keyword, and fail to decompile it (**even it's not encrypted!**).
+
+  > **Warning:** The Editor and Export Templates must always share the identical patch seed. If you face any problems delete the project's local `.godot/` cache directory before exporting to remove any stale, un-scrambled tokens.
 
 ## Restore Backup Files
 

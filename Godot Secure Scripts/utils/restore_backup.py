@@ -11,6 +11,7 @@ MODIFICATIONS = [
     ,"core/io/file_access_pack.h"
     ,"core/io/file_access_encrypted.h"
     ,"core/io/file_access_encrypted.cpp"
+    ,"modules/gdscript/gdscript_tokenizer.h"
 
     #Camellia Modifications Files
     ,"core/crypto/crypto_core.h"
